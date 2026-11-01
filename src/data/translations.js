@@ -1,0 +1,76 @@
+export const TRANSLATIONS = {
+  mm: {
+    badge: 'Netlify Ready • Social Media Video Downloader',
+    heroTitle: 'TikTok, YouTube နှင့် Telegram Video များကို',
+    heroHighlight: 'တစ်နေရာတည်းမှာ အလွယ်တကူ Download ဆွဲပါ',
+    heroSub:
+      'Link ထည့်လိုက်ရုံနဲ့ Platform ကို အလိုအလျောက် ခွဲခြားပေးပြီး Watermark မပါတဲ့ HD MP4 သို့မဟုတ် MP3 Audio အဖြစ် ရယူနိုင်ပါတယ်။',
+    placeholder: 'TikTok, YouTube သို့မဟုတ် Telegram video link ကို ဒီနေရာမှာ ထည့်ပါ...',
+    pasteBtn: 'Paste',
+    fetchBtn: 'Video ရှာမည်',
+    fetchingBtn: 'ရှာဖွေနေပါသည်...',
+    trySample: 'စမ်းသပ်ရန် Sample Link များ -',
+    qualityLabel: 'အရည်အသွေး (Quality)',
+    formatLabel: 'ဖိုင်အမျိုးအစား (Format)',
+    noWatermark: 'Watermark ဖျောက်မည် (TikTok)',
+    detectedPlatform: 'အလိုအလျောက် သိရှိသော Platform:',
+    downloadOptions: 'Download ရယူနိုင်သော Format များ',
+    previewVideo: 'Video အစမ်းကြည့်ရန်',
+    historyTitle: 'နောက်ဆုံး ရှာဖွေခဲ့သော Video များ',
+    clearHistory: 'မှတ်တမ်းဖျက်မည်',
+    apiSettings: 'API ချိတ်ဆက်မှု',
+    featuresTitle: 'ပါဝင်သော လုပ်ဆောင်ချက်များ',
+    features: [
+      {
+        title: 'TikTok No Watermark (Live API)',
+        desc: 'TikTok link ထည့်လိုက်ရုံနဲ့ Watermark မပါတဲ့ HD MP4 နဲ့ MP3 အသံဖိုင်ကို တိုက်ရိုက် ဆွဲယူနိုင်ပါတယ်။',
+      },
+      {
+        title: 'YouTube 1080p & MP3',
+        desc: 'YouTube Video နှင့် Shorts များအတွက် အချက်အလက်နှင့် Thumbnail ကို ချက်ချင်းဆွဲထုတ်ပေးပါတယ်။',
+      },
+      {
+        title: 'Telegram Public Videos',
+        desc: 'Public Telegram Channel များမှ Video post link များကို တိုက်ရိုက် ဖတ်ရှုပြီး Download ဆွဲနိုင်ပါတယ်။',
+      },
+    ],
+    netlifyGuideTitle: 'Netlify ပေါ်သို့ လွှင့်တင်နည်း (Deploy Guide)',
+  },
+  en: {
+    badge: 'Netlify Ready • Social Media Video Downloader',
+    heroTitle: 'Download Videos from TikTok, YouTube & Telegram',
+    heroHighlight: 'Fast, Clean & Without Watermarks',
+    heroSub:
+      'Paste any video link below. Our smart detector automatically identifies the platform and extracts HD MP4 or MP3 streams.',
+    placeholder: 'Paste a TikTok, YouTube, or Telegram video URL here...',
+    pasteBtn: 'Paste',
+    fetchBtn: 'Fetch Video',
+    fetchingBtn: 'Fetching...',
+    trySample: 'Try a sample link:',
+    qualityLabel: 'Video Quality',
+    formatLabel: 'Output Format',
+    noWatermark: 'Remove Watermark (TikTok)',
+    detectedPlatform: 'Auto-detected Platform:',
+    downloadOptions: 'Available Download Streams',
+    previewVideo: 'Video Preview',
+    historyTitle: 'Recent Downloads',
+    clearHistory: 'Clear History',
+    apiSettings: 'API Config',
+    featuresTitle: 'Supported Platforms & Capabilities',
+    features: [
+      {
+        title: 'TikTok No Watermark (Live API)',
+        desc: 'Extracts clean 1080p/720p MP4 videos without watermarks and original MP3 audio tracks out of the box.',
+      },
+      {
+        title: 'YouTube Video & Shorts',
+        desc: 'Fetches real-time metadata via YouTube oEmbed and connects seamlessly to your Cobalt or RapidAPI backend.',
+      },
+      {
+        title: 'Telegram Public Channels',
+        desc: 'Parses t.me public channel video links with embedded preview and direct stream support.',
+      },
+    ],
+    netlifyGuideTitle: 'How to Deploy on Netlify',
+  },
+};
