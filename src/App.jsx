@@ -20,6 +20,7 @@ import {
   Send,
   Youtube,
   Video,
+  Bot,
 } from 'lucide-react';
 import { detectPlatform, PLATFORMS, SAMPLE_LINKS } from './utils/platformDetector';
 import { fetchVideoInfo, loadApiSettings, saveApiSettings } from './services/videoApi';
@@ -75,6 +76,15 @@ export default function App() {
   const [showApiModal, setShowApiModal] = useState(false);
   const [apiSettings, setApiSettings] = useState(() => loadApiSettings());
 
+  // Telegram Bot Setup Modal state
+  const [showBotModal, setShowBotModal] = useState(false);
+  const [botToken, setBotToken] = useState(() => localStorage.getItem('snapfetch_bot_token') || '');
+  const [siteUrl, setSiteUrl] = useState(
+    () => localStorage.getItem('snapfetch_site_url') || window.location.origin
+  );
+  const [botStatus, setBotStatus] = useState(null);
+  const [botLoading, setBotLoading] = useState(false);
+
   const detected = detectPlatform(url);
 
   useEffect(() => {
@@ -82,6 +92,17 @@ export default function App() {
       setActiveTab(detected);
     }
   }, [detected]);
+
+  // Auto-resolve if opened from Telegram Bot link (?url=https://...)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const incomingUrl = params.get('url');
+    if (incomingUrl) {
+      setUrl(incomingUrl);
+      handleSubmit(null, incomingUrl);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handlePaste = async () => {
     try {
@@ -151,15 +172,30 @@ export default function App() {
 
   const triggerDownload = async (item, title) => {
     setDownloadingId(item.id);
+    const safeName = (title || 'video').replace(/[^a-zA-Z0-9-_]/g, '_').slice(0, 50);
+    const filename = `${safeName}.${item.ext.toLowerCase()}`;
+
     try {
+      const streamProxyUrl = `/api/stream?url=${encodeURIComponent(item.url)}&filename=${encodeURIComponent(filename)}`;
+      const headCheck = await fetch(streamProxyUrl, { method: 'HEAD' }).catch(() => null);
+
+      if (headCheck && headCheck.ok) {
+        const a = document.createElement('a');
+        a.href = streamProxyUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        return;
+      }
+
       const response = await fetch(item.url);
       if (!response.ok) throw new Error('Direct fetch blocked by CORS');
       const blob = await response.blob();
       const blobUrl = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
-      const safeName = (title || 'video').replace(/[^a-zA-Z0-9-_]/g, '_').slice(0, 45);
       a.href = blobUrl;
-      a.download = `${safeName}.${item.ext.toLowerCase()}`;
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -182,6 +218,47 @@ export default function App() {
     setShowApiModal(false);
   };
 
+  const handleConnectTelegramWebhook = async (e) => {
+    e.preventDefault();
+    if (!botToken.trim()) {
+      setBotStatus({ ok: false, msg: 'ကျေးဇူးပြု၍ @BotFather ထံမှ ရရှိသော Bot Token ထည့်ပါ။' });
+      return;
+    }
+    setBotLoading(true);
+    setBotStatus(null);
+    localStorage.setItem('snapfetch_bot_token', botToken.trim());
+    localStorage.setItem('snapfetch_site_url', siteUrl.trim());
+
+    try {
+      const res = await fetch('/api/telegram-bot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'setWebhook',
+          botToken: botToken.trim(),
+          siteUrl: siteUrl.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setBotStatus({
+          ok: true,
+          msg: `ချိတ်ဆက်မှု အောင်မြင်ပါသည်! @${data.botInfo?.username || 'Bot'} သို့ Link ပို့ပြီး စမ်းသပ်နိုင်ပါပြီ။`,
+          webhookUrl: data.webhookUrl,
+        });
+      } else {
+        setBotStatus({
+          ok: false,
+          msg: data.description || data.error || 'Webhook ချိတ်ဆက်ရာတွင် အမှားရှိနေပါသည်။',
+        });
+      }
+    } catch (err) {
+      setBotStatus({ ok: false, msg: err.message });
+    } finally {
+      setBotLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 relative overflow-x-hidden">
       <div className="pointer-events-none fixed inset-0 overflow-hidden z-0">
@@ -199,12 +276,20 @@ export default function App() {
             <div>
               <span className="font-bold text-lg tracking-tight text-white">SnapFetch</span>
               <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                v1.0
+                v1.2
               </span>
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowBotModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 text-xs font-semibold text-sky-300 transition"
+            >
+              <Bot className="w-3.5 h-3.5 text-sky-400" />
+              <span>Telegram Bot</span>
+            </button>
+
             <button
               onClick={() => setLang(lang === 'mm' ? 'en' : 'mm')}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-medium text-slate-200 transition"
@@ -336,7 +421,7 @@ export default function App() {
                     className="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1 text-white"
                   >
                     <option value="mp4">MP4 (Video)</option>
-                    <option value="mp3">MP3 (Audio Only)</option>
+                    <option value="mp3">MP3 / M4A (Audio Only)</option>
                   </select>
                 </label>
 
@@ -351,7 +436,7 @@ export default function App() {
                     >
                       <option value="1080">1080p Full HD</option>
                       <option value="720">720p HD</option>
-                      <option value="480">480p Standard</option>
+                      <option value="360">360p Standard</option>
                     </select>
                   </label>
                 )}
@@ -418,7 +503,15 @@ export default function App() {
             <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
               <div className="md:col-span-5 flex flex-col gap-3">
                 <div className="relative rounded-xl overflow-hidden bg-slate-900 border border-slate-800 aspect-video">
-                  {result.previewVideoUrl ? (
+                  {result.platform === PLATFORMS.YOUTUBE && result.embedUrl ? (
+                    <iframe
+                      src={result.embedUrl}
+                      title={result.title}
+                      className="w-full h-full"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                    />
+                  ) : result.previewVideoUrl ? (
                     <video
                       src={result.previewVideoUrl}
                       poster={result.thumbnail}
@@ -433,7 +526,7 @@ export default function App() {
                     />
                   )}
                   <span
-                    className={`absolute top-2.5 left-2.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border backdrop-blur-md ${
+                    className={`absolute top-2.5 left-2.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border backdrop-blur-md pointer-events-none ${
                       PLATFORM_META[result.platform]?.badgeBg
                     }`}
                   >
@@ -512,6 +605,7 @@ export default function App() {
                             target="_blank"
                             rel="noopener noreferrer"
                             className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300"
+                            title="Open direct stream"
                           >
                             <ExternalLink className="w-3.5 h-3.5" />
                           </a>
@@ -530,6 +624,30 @@ export default function App() {
             </div>
           </div>
         )}
+
+        {/* Telegram Bot <=50MB / >50MB Banner */}
+        <section className="mt-10 p-5 rounded-2xl bg-gradient-to-r from-sky-950/60 via-slate-900 to-indigo-950/50 border border-sky-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-start gap-3.5">
+            <div className="w-10 h-10 rounded-xl bg-sky-500/20 border border-sky-500/40 flex items-center justify-center shrink-0">
+              <Bot className="w-5 h-5 text-sky-400" />
+            </div>
+            <div className="text-xs text-slate-300 space-y-1">
+              <h3 className="font-bold text-sm text-white">
+                Telegram Bot ချိတ်ဆက်မှု (≤ 50 MB Direct Video / &gt; 50 MB Download Link)
+              </h3>
+              <p className="text-slate-400">
+                Bot ဆီသို့ Link ပို့လိုက်ရုံဖြင့် <strong>50 MB အောက်</strong> ဆိုလျှင် Video ဖိုင်တိုက်ရိုက် ပို့ပေးပြီး၊{' '}
+                <strong>50 MB အထက်</strong> ဆိုလျှင် Direct Download Link နှင့် ဤ Website Link ကို ပြန်ပို့ပေးပါသည်။
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setShowBotModal(true)}
+            className="px-4 py-2.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs shrink-0 transition"
+          >
+            Bot ချိတ်ဆက်ရန်
+          </button>
+        </section>
 
         {history.length > 0 && (
           <section className="mt-10">
@@ -600,23 +718,128 @@ export default function App() {
             <div className="text-xs text-slate-300 space-y-1.5">
               <h3 className="font-semibold text-sm text-white">{t.netlifyGuideTitle}</h3>
               <p>
-                1. <strong>Drag & Drop Deploy</strong>: Project ထဲက build ထုတ်ထားပြီးသား{' '}
-                <code className="px-1.5 py-0.5 rounded bg-slate-800 text-indigo-300">dist</code>{' '}
-                folder ကို Netlify Drop (app.netlify.com/drop) ပေါ်သို့ တိုက်ရိုက် ဆွဲတင်နိုင်ပါတယ်။
+                1. <strong>GitHub + Netlify Auto Deploy</strong>: သင်၏ GitHub repository (
+                <code className="px-1.5 py-0.5 rounded bg-slate-800 text-indigo-300">
+                  htoohtethtet331-cpu/download-Proj
+                </code>
+                ) ကို Netlify နှင့် ချိတ်ဆက်လိုက်ပါက YouTube/TikTok/Telegram Resolver နှင့် Telegram Bot Webhook တို့ အလိုအလျောက် အလုပ်လုပ်ပေးပါမည်။
               </p>
               <p>
-                2. <strong>GitHub + Netlify Auto Deploy</strong>: GitHub ပေါ်တင်ပြီး Netlify နှင့် ချိတ်ဆက်ပါက{' '}
-                <code className="px-1.5 py-0.5 rounded bg-slate-800 text-indigo-300">
-                  netlify.toml
+                2. <strong>Telegram Bot Environment Variable</strong>: Netlify Site Settings → Environment Variables တွင်{' '}
+                <code className="px-1.5 py-0.5 rounded bg-slate-800 text-sky-300">
+                  TELEGRAM_BOT_TOKEN
                 </code>{' '}
-                နှင့် Serverless Function (<code className="px-1.5 py-0.5 rounded bg-slate-800 text-indigo-300">/api/resolve-video</code>)
-                အလိုအလျောက် အလုပ်လုပ်ပေးပါမယ်။
+                ထည့်သွင်းနိုင်သလို အပေါ်ရှိ <strong>Telegram Bot</strong> ခလုတ်မှလည်း တိုက်ရိုက် ချိတ်ဆက်နိုင်ပါသည်။
               </p>
             </div>
           </div>
         </section>
       </main>
 
+      {/* Telegram Bot Setup Modal */}
+      {showBotModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
+          <div className="w-full max-w-lg rounded-2xl bg-slate-900 border border-slate-800 p-6 shadow-2xl">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <Bot className="w-5 h-5 text-sky-400" />
+                <h3 className="font-bold text-base text-white">
+                  Telegram Bot ချိတ်ဆက်ရန် (≤ 50MB Video / &gt; 50MB Link)
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowBotModal(false)}
+                className="text-slate-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-4 text-xs text-slate-300">
+              <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-1.5">
+                <div className="font-semibold text-sky-300">အလုပ်လုပ်ပုံ (Bot Workflow):</div>
+                <p>
+                  • User က Bot ဆီသို့ TikTok / YouTube / Telegram link ပို့လိုက်သည့်အခါ File Size ကို အလိုအလျောက် စစ်ဆေးပေးပါသည်။
+                </p>
+                <p>
+                  • <strong>≤ 50 MB (50 MB အောက်)</strong>: Video ဖိုင်ကို Telegram Chat ထဲသို့ တိုက်ရိုက်ပို့ပေးပြီး Website link ပါ ထည့်ပေးပါသည်။
+                </p>
+                <p>
+                  • <strong>&gt; 50 MB (50 MB အထက်)</strong>: Direct Download ဆွဲရန် Link ခလုတ်နှင့် Website ပေါ်တွင် အလိုအလျောက် ပွင့်လာမည့် Link (
+                  <code className="text-indigo-300">/?url=...</code>) ကို ပြန်ပို့ပေးပါသည်။
+                </p>
+              </div>
+
+              <form onSubmit={handleConnectTelegramWebhook} className="space-y-3">
+                <div>
+                  <label className="block text-slate-300 font-medium mb-1">
+                    1. Telegram Bot Token (@BotFather မှ ရယူရန်)
+                  </label>
+                  <input
+                    type="text"
+                    value={botToken}
+                    onChange={(e) => setBotToken(e.target.value)}
+                    placeholder="123456789:AAH_your_telegram_bot_token..."
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 font-medium mb-1">
+                    2. သင်၏ Netlify Website URL (Production URL)
+                  </label>
+                  <input
+                    type="url"
+                    value={siteUrl}
+                    onChange={(e) => setSiteUrl(e.target.value)}
+                    placeholder="https://your-site-name.netlify.app"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white"
+                  />
+                </div>
+
+                {botStatus && (
+                  <div
+                    className={`p-3 rounded-xl border ${
+                      botStatus.ok
+                        ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-200'
+                        : 'bg-red-500/10 border-red-500/30 text-red-200'
+                    }`}
+                  >
+                    {botStatus.msg}
+                  </div>
+                )}
+
+                <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 text-[11px] text-slate-400">
+                  💻 <strong>Local တွင် စမ်းသပ်လိုပါက</strong> Terminal တွင် အောက်ပါ command ဖြင့် Bot ကို တိုက်ရိုက် Run နိုင်ပါသည် —
+                  <code className="block mt-1.5 p-2 rounded bg-slate-900 text-sky-300 select-all">
+                    TELEGRAM_BOT_TOKEN="{botToken || 'YOUR_BOT_TOKEN'}" npm run bot
+                  </code>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setShowBotModal(false)}
+                    className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700"
+                  >
+                    Close
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={botLoading}
+                    className="px-4 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold flex items-center gap-1.5"
+                  >
+                    {botLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                    <span>Connect Netlify Webhook</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* API Configuration Modal */}
       {showApiModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
           <div className="w-full max-w-md rounded-2xl bg-slate-900 border border-slate-800 p-6 shadow-2xl">
@@ -642,12 +865,9 @@ export default function App() {
                   className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-white"
                 >
                   <option value="auto">
-                    Auto (Live TikWM for TikTok + YouTube oEmbed + Fallback)
+                    Auto (Built-in YouTube InnerTube + TikWM + Telegram Resolver)
                   </option>
-                  <option value="custom">
-                    Custom Backend / Cobalt API / Netlify Function Proxy
-                  </option>
-                  <option value="demo">Offline / Demo Preview Mode</option>
+                  <option value="custom">Custom Backend / Cobalt API URL</option>
                 </select>
               </div>
 
